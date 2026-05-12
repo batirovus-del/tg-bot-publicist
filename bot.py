@@ -32,14 +32,14 @@ class PublicistBot:
         await update.message.reply_text(
             "👋 Привет! Я бот-публицист.\n\n"
             f"Я автоматически публикую посты каждый день в {config.POST_HOUR}:{config.POST_MINUTE:02d} ({config.TIMEZONE}).\n\n"
-            "📋 <b>Доступные команды:</b>\n\n"
+            "📋 *Доступные команды:*\n\n"
             "📝 /addpost - добавить новый пост\n"
             "📄 /listposts - список всех постов\n"
             "📤 /publish <день> - опубликовать пост\n"
             "🗑️ /deletepost <день> - удалить пост\n\n"
             "📊 /status - статус планировщика\n"
             "🧪 /test - тестовая публикация",
-            parse_mode='HTML'
+            parse_mode='Markdown'
         )
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -74,14 +74,17 @@ class PublicistBot:
                 await update.message.reply_text("📭 Нет постов")
                 return
 
-            message = "📝 <b>Список постов:</b>\n\n"
+            message = "📝 *Список постов:*\n\n"
             for post in posts:
-                message += f"<b>День {post['day']}: {post['title']}</b>\n"
-                message += f"{post['content'][:100]}...\n\n"
+                # Экранируем специальные символы для Markdown
+                title = post['title'].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
+                content_preview = post['content'][:100].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
+                message += f"*День {post['day']}: {title}*\n"
+                message += f"{content_preview}...\n\n"
 
             message += "\n💡 Используй /publish <день> для публикации"
 
-            await update.message.reply_text(message, parse_mode='HTML')
+            await update.message.reply_text(message, parse_mode='Markdown')
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка: {e}")
             logger.error(f"Ошибка при получении списка постов: {e}")
@@ -168,11 +171,11 @@ class PublicistBot:
     async def addpost_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Начало добавления поста"""
         await update.message.reply_text(
-            "📝 <b>Добавление нового поста</b>\n\n"
+            "📝 *Добавление нового поста*\n\n"
             "Шаг 1/3: Введи заголовок поста\n"
             "(Например: SaaS продукт для бизнеса)\n\n"
             "Отправь /cancel для отмены",
-            parse_mode='HTML'
+            parse_mode='Markdown'
         )
         return TITLE
 
@@ -183,7 +186,7 @@ class PublicistBot:
             "✅ Заголовок сохранен\n\n"
             "Шаг 2/3: Введи содержание поста\n"
             "(Можно использовать Markdown форматирование)",
-            parse_mode='HTML'
+            parse_mode='Markdown'
         )
         return CONTENT
 
@@ -195,7 +198,7 @@ class PublicistBot:
             "Шаг 3/3: Введи ключевые слова для картинки Unsplash\n"
             "(Например: business success money)\n\n"
             "Или отправь /skip чтобы пропустить",
-            parse_mode='HTML'
+            parse_mode='Markdown'
         )
         return IMAGE_QUERY
 
@@ -233,11 +236,11 @@ class PublicistBot:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
             await update.message.reply_text(
-                f"✅ <b>Пост успешно добавлен!</b>\n\n"
+                f"✅ *Пост успешно добавлен!*\n\n"
                 f"День: {next_day}\n"
                 f"Заголовок: {new_post['title']}\n\n"
                 f"Используй /publish {next_day} для публикации",
-                parse_mode='HTML'
+                parse_mode='Markdown'
             )
 
             context.user_data.clear()
