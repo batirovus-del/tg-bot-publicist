@@ -116,7 +116,10 @@ class PublicistBot:
 
             # Получаем картинку
             if post.get('image_query'):
-                image_url = f"https://source.unsplash.com/1200x630/?{post['image_query']}"
+                import random
+                random_id = random.randint(1, 1000)
+                image_url = f"https://picsum.photos/1200/630?random={random_id}"
+
                 await self.application.bot.send_photo(
                     chat_id=config.CHANNEL_ID,
                     photo=image_url,

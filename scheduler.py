@@ -79,20 +79,18 @@ class PostScheduler:
         """
         Получение случайной картинки из Unsplash по запросу
         """
+        if not query:
+            return None
+
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    'https://source.unsplash.com/1200x630/',
-                    params={'q': query},
-                    follow_redirects=True
-                )
-                if response.status_code == 200:
-                    return str(response.url)
+            # Используем Unsplash API напрямую с рандомным ID
+            import random
+            random_id = random.randint(1, 1000)
+            image_url = f"https://picsum.photos/1200/630?random={random_id}"
+            return image_url
         except Exception as e:
             logger.error(f"Ошибка получения картинки: {e}")
-
-        # Возвращаем дефолтную картинку при ошибке
-        return 'https://source.unsplash.com/1200x630/?business,success'
+            return None
 
     def start(self):
         """Запуск планировщика"""
