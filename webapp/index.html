@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Бот Публицист</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 16px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--tg-theme-hint-color, #999999);
+            font-size: 14px;
+        }
+
+        .card {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card p {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--tg-theme-hint-color, #666666);
+        }
+
+        .status-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            background: var(--tg-theme-bg-color, #ffffff);
+            border-radius: 8px;
+        }
+
+        .status-label {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #666666);
+        }
+
+        .status-value {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            background: var(--tg-theme-button-color, #3390ec);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            margin-bottom: 12px;
+            transition: opacity 0.2s;
+        }
+
+        .button:active {
+            opacity: 0.8;
+        }
+
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .button.secondary {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+
+        .error {
+            background: #ff3b30;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .success {
+            background: #34c759;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        #nextPost {
+            font-weight: 600;
+            color: var(--tg-theme-text-color, #000000);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Бот Публицист</h1>
+            <p>Управление автоматической публикацией</p>
+        </div>
+
+        <div id="message"></div>
+
+        <div class="card">
+            <h2>📊 Статус</h2>
+            <div class="status-info">
+                <div class="status-row">
+                    <span class="status-label">Планировщик:</span>
+                    <span class="status-value" id="schedulerStatus">Загрузка...</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Следующая публикация:</span>
+                    <span class="status-value" id="nextPost">Загрузка...</span>
+                </div>
+            </div>
+        </div>
+
+        <button class="button" id="testBtn" onclick="testPost()">
+            🧪 Отправить тестовый пост
+        </button>
+
+        <button class="button secondary" id="refreshBtn" onclick="loadStatus()">
+            🔄 Обновить статус
+        </button>
+
+        <div class="card">
+            <h2>ℹ️ Информация</h2>
+            <p>Бот автоматически публикует посты каждый день в 12:00 по московскому времени.</p>
+            <p style="margin-top: 8px;">Используйте кнопку "Тестовый пост" для проверки работы бота.</p>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // API endpoint (будет работать через бота)
+        const API_URL = 'https://api.telegram.org/bot8042167444:AAEpdAlLRua2Lwc4Cp1Xtp8Z1wzbfGcjOKY';
+
+        function showMessage(text, type = 'success') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
+            setTimeout(() => {
+                messageDiv.innerHTML = '';
+            }, 3000);
+        }
+
+        async function loadStatus() {
+            try {
+                document.getElementById('refreshBtn').disabled = true;
+
+                // Отправляем команду боту для получения статуса
+                const user = tg.initDataUnsafe.user;
+                if (user) {
+                    await fetch(`${API_URL}/sendMessage`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: user.id,
+                            text: '/status'
+                        })
+                    });
+                }
+
+                // Показываем статическую информацию
+                document.getElementById('schedulerStatus').textContent = '✅ Активен';
+                document.getElementById('nextPost').textContent = 'Каждый день в 12:00 МСК';
+
+                tg.HapticFeedback.notificationOccurred('success');
+            } catch (error) {
+                showMessage('Ошибка загрузки статуса', 'error');
+                tg.HapticFeedback.notificationOccurred('error');
+            } finally {
+                document.getElementById('refreshBtn').disabled = false;
+            }
+        }
+
+        async function testPost() {
+            try {
+                document.getElementById('testBtn').disabled = true;
+                tg.HapticFeedback.impactOccurred('medium');
+
+                const user = tg.initDataUnsafe.user;
+                if (!user) {
+                    showMessage('Ошибка: не удалось получить данные пользователя', 'error');
+                    return;
+                }
+
+                // Отправляем команду /test боту
+                const response = await fetch(`${API_URL}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: user.id,
+                        text: '/test'
+                    })
+                });
+
+                if (response.ok) {
+                    showMessage('✅ Тестовый пост отправлен!', 'success');
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else {
+                    throw new Error('Ошибка отправки');
+                }
+            } catch (error) {
+                showMessage('❌ Ошибка при отправке поста', 'error');
+                tg.HapticFeedback.notificationOccurred('error');
+            } finally {
+                document.getElementById('testBtn').disabled = false;
+            }
+        }
+
+        // Загружаем статус при открытии
+        loadStatus();
+    </script>
+</body>
+</html>
