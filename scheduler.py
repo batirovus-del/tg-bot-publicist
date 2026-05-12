@@ -1,8 +1,10 @@
 import logging
+import json
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
+import httpx
 from telegram import Bot
 from telegram.error import TelegramError
 
@@ -21,15 +23,23 @@ class PostScheduler:
     async def send_daily_post(self):
         """Отправка ежедневного поста в канал/группу"""
         try:
-            # Здесь будет логика генерации/получения контента для поста
-            post_text = self.get_post_content()
+            # Получаем контент поста
+            post_text, image_url = await self.get_post_content()
 
-            # Отправка поста в канал
-            await self.bot.send_message(
-                chat_id=config.CHANNEL_ID,
-                text=post_text,
-                parse_mode='HTML'
-            )
+            # Отправка поста с картинкой в канал
+            if image_url:
+                await self.bot.send_photo(
+                    chat_id=config.CHANNEL_ID,
+                    photo=image_url,
+                    caption=post_text,
+                    parse_mode='Markdown'
+                )
+            else:
+                await self.bot.send_message(
+                    chat_id=config.CHANNEL_ID,
+                    text=post_text,
+                    parse_mode='Markdown'
+                )
 
             logger.info(f"Пост успешно опубликован в {datetime.now()}")
 
@@ -38,23 +48,51 @@ class PostScheduler:
         except Exception as e:
             logger.error(f"Неожиданная ошибка: {e}")
 
-    def get_post_content(self) -> str:
+    async def get_post_content(self) -> tuple[str, str]:
         """
-        Получение контента для поста.
-        TODO: Реализовать логику получения контента
-        (из базы данных, API, файла и т.д.)
+        Получение контента для поста на основе дня недели.
+        Возвращает (текст_поста, url_картинки)
         """
-        current_date = datetime.now(pytz.timezone(config.TIMEZONE)).strftime("%d.%m.%Y")
+        # Загружаем посты из JSON
+        with open('posts_data.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
 
-        # Пример поста
-        post = f"""
-<b>📰 Ежедневный пост - {current_date}</b>
+        # Определяем день недели (1 = понедельник, 7 = воскресенье)
+        current_day = datetime.now(pytz.timezone(config.TIMEZONE)).isoweekday()
 
-Здесь будет ваш контент для публикации.
+        # Находим пост для текущего дня
+        post = next((p for p in data['posts'] if p['day'] == current_day), data['posts'][0])
 
-<i>Автоматически опубликовано ботом</i>
-"""
-        return post.strip()
+        # Получаем картинку из Unsplash
+        image_url = await self.get_unsplash_image(post['image_query'])
+
+        # Формируем текст поста
+        post_text = f"""БИСМИЛЛАХ
+
+{post['content']}
+
+ИНШААЛЛАХ"""
+
+        return post_text, image_url
+
+    async def get_unsplash_image(self, query: str) -> str:
+        """
+        Получение случайной картинки из Unsplash по запросу
+        """
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    'https://source.unsplash.com/1200x630/',
+                    params={'q': query},
+                    follow_redirects=True
+                )
+                if response.status_code == 200:
+                    return str(response.url)
+        except Exception as e:
+            logger.error(f"Ошибка получения картинки: {e}")
+
+        # Возвращаем дефолтную картинку при ошибке
+        return 'https://source.unsplash.com/1200x630/?business,success'
 
     def start(self):
         """Запуск планировщика"""
