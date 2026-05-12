@@ -25,7 +25,10 @@ class PublicistBot:
         """Обработчик команды /start"""
         keyboard = [
             [
-                InlineKeyboardButton("🚀 Открыть панель управления", web_app={"url": "https://batirovus-del.github.io/tg-bot-publicist/"})
+                InlineKeyboardButton("🎛️ Админ-панель", web_app={"url": "https://batirovus-del.github.io/tg-bot-publicist/admin.html"})
+            ],
+            [
+                InlineKeyboardButton("📊 Статус", web_app={"url": "https://batirovus-del.github.io/tg-bot-publicist/"})
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -33,7 +36,8 @@ class PublicistBot:
         await update.message.reply_text(
             "👋 Привет! Я бот-публицист.\n\n"
             f"Я автоматически публикую посты каждый день в {config.POST_HOUR}:{config.POST_MINUTE:02d} ({config.TIMEZONE}).\n\n"
-            "Открой панель управления для контроля бота:",
+            "🎛️ Админ-панель - управление постами\n"
+            "📊 Статус - информация о боте",
             reply_markup=reply_markup
         )
 
