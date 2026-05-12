@@ -25,7 +25,7 @@ class PublicistBot:
         """Обработчик команды /start"""
         keyboard = [
             [
-                InlineKeyboardButton("🚀 Открыть панель управления", web_app={"url": "https://bayram-dev.github.io/tg-bot-publicist/"})
+                InlineKeyboardButton("🚀 Открыть панель управления", web_app={"url": "https://batirovus-del.github.io/tg-bot-publicist/"})
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
