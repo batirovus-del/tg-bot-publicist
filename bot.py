@@ -1,7 +1,7 @@
 import logging
 import asyncio
-from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 import config
 from scheduler import PostScheduler
@@ -23,13 +23,22 @@ class PublicistBot:
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
+        keyboard = [
+            [
+                InlineKeyboardButton("📊 Статус", callback_data='status'),
+                InlineKeyboardButton("🧪 Тест", callback_data='test')
+            ],
+            [
+                InlineKeyboardButton("ℹ️ Помощь", callback_data='help')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
         await update.message.reply_text(
             "👋 Привет! Я бот-публицист.\n\n"
-            f"Я буду автоматически публиковать посты каждый день в {config.POST_HOUR}:{config.POST_MINUTE:02d} ({config.TIMEZONE}).\n\n"
-            "Доступные команды:\n"
-            "/start - Информация о боте\n"
-            "/status - Статус планировщика\n"
-            "/test - Тестовая публикация поста"
+            f"Я автоматически публикую посты каждый день в {config.POST_HOUR}:{config.POST_MINUTE:02d} ({config.TIMEZONE}).\n\n"
+            "Выбери действие:",
+            reply_markup=reply_markup
         )
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -52,6 +61,56 @@ class PublicistBot:
             await update.message.reply_text(f"❌ Ошибка при публикации: {e}")
             logger.error(f"Ошибка при тестовой публикации: {e}")
 
+    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик нажатий на инлайн-кнопки"""
+        query = update.callback_query
+        await query.answer()
+
+        keyboard = [
+            [
+                InlineKeyboardButton("📊 Статус", callback_data='status'),
+                InlineKeyboardButton("🧪 Тест", callback_data='test')
+            ],
+            [
+                InlineKeyboardButton("ℹ️ Помощь", callback_data='help')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if query.data == 'status':
+            if self.scheduler and self.scheduler.scheduler.running:
+                next_run = self.scheduler.scheduler.get_job('daily_post').next_run_time
+                text = (
+                    f"✅ Планировщик активен\n\n"
+                    f"⏰ Следующая публикация:\n"
+                    f"{next_run.strftime('%d.%m.%Y %H:%M:%S %Z')}\n\n"
+                    f"Выбери действие:"
+                )
+            else:
+                text = "❌ Планировщик не активен\n\nВыбери действие:"
+
+            await query.edit_message_text(text=text, reply_markup=reply_markup)
+
+        elif query.data == 'test':
+            try:
+                await self.scheduler.send_daily_post()
+                text = "✅ Тестовый пост успешно опубликован!\n\nВыбери действие:"
+            except Exception as e:
+                text = f"❌ Ошибка при публикации: {e}\n\nВыбери действие:"
+                logger.error(f"Ошибка при тестовой публикации: {e}")
+
+            await query.edit_message_text(text=text, reply_markup=reply_markup)
+
+        elif query.data == 'help':
+            text = (
+                "ℹ️ <b>Помощь</b>\n\n"
+                "📊 <b>Статус</b> - проверить статус планировщика и время следующей публикации\n\n"
+                "🧪 <b>Тест</b> - отправить тестовый пост в канал прямо сейчас\n\n"
+                f"⏰ Бот автоматически публикует посты каждый день в {config.POST_HOUR}:{config.POST_MINUTE:02d} ({config.TIMEZONE})\n\n"
+                "Выбери действие:"
+            )
+            await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode='HTML')
+
     async def post_init(self, application: Application):
         """Инициализация после запуска приложения"""
         # Создание и запуск планировщика
@@ -71,6 +130,9 @@ class PublicistBot:
         self.application.add_handler(CommandHandler("start", self.start_command))
         self.application.add_handler(CommandHandler("status", self.status_command))
         self.application.add_handler(CommandHandler("test", self.test_command))
+
+        # Регистрация обработчика инлайн-кнопок
+        self.application.add_handler(CallbackQueryHandler(self.button_callback))
 
         # Регистрация хуков инициализации и остановки
         self.application.post_init = self.post_init
