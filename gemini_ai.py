@@ -68,7 +68,7 @@ class GeminiAI:
 
         try:
             response = self.client.models.generate_content(
-                model='gemini-2.0-flash-exp',
+                model='gemini-1.5-flash',
                 contents=prompt
             )
             text = response.text
@@ -143,7 +143,7 @@ class GeminiAI:
 
         try:
             response = self.client.models.generate_content(
-                model='gemini-2.0-flash-exp',
+                model='gemini-1.5-flash',
                 contents=prompt
             )
             return response.text.strip()
