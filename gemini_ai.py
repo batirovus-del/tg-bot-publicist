@@ -13,7 +13,8 @@ class GeminiAI:
         self.api_key = api_key or config.GEMINI_API_KEY
         if self.api_key:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-pro')
+            # Используем gemini-pro вместо gemini-1.5-pro
+            self.model = genai.GenerativeModel('gemini-pro')
         else:
             self.model = None
             logger.warning("Gemini API ключ не установлен")
