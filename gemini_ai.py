@@ -67,9 +67,9 @@ class GeminiAI:
 """
 
         try:
-            # Используем полный путь модели для нового API
+            # Используем имя модели без префикса - библиотека сама добавит 'models/'
             response = self.client.models.generate_content(
-                model='models/gemini-1.5-flash',
+                model='gemini-1.5-flash-latest',
                 contents=prompt
             )
             text = response.text
@@ -144,7 +144,7 @@ class GeminiAI:
 
         try:
             response = self.client.models.generate_content(
-                model='models/gemini-1.5-flash',
+                model='gemini-1.5-flash-latest',
                 contents=prompt
             )
             return response.text.strip()
