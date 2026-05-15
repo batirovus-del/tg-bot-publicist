@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import json
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
 
 import config
@@ -27,18 +27,22 @@ class PublicistBot:
         self.application = Application.builder().token(config.BOT_TOKEN).build()
         self.scheduler = None
 
+    def get_main_keyboard(self):
+        """Создание главной клавиатуры с кнопками"""
+        keyboard = [
+            [KeyboardButton("📊 Статус"), KeyboardButton("📄 Список постов")],
+            [KeyboardButton("📝 Добавить пост"), KeyboardButton("🧪 Тест")],
+            [KeyboardButton("📤 Опубликовать"), KeyboardButton("🗑️ Удалить пост")]
+        ]
+        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
         await update.message.reply_text(
             "👋 Привет! Я бот-публицист.\n\n"
             f"Я автоматически публикую посты каждый день в {config.POST_HOUR}:{config.POST_MINUTE:02d} ({config.TIMEZONE}).\n\n"
-            "📋 *Доступные команды:*\n\n"
-            "📝 /addpost - добавить новый пост\n"
-            "📄 /listposts - список всех постов\n"
-            "📤 /publish <день> - опубликовать пост\n"
-            "🗑️ /deletepost <день> - удалить пост\n\n"
-            "📊 /status - статус планировщика\n"
-            "🧪 /test - тестовая публикация",
+            "Используй кнопки ниже для управления ботом:",
+            reply_markup=self.get_main_keyboard(),
             parse_mode='Markdown'
         )
 
@@ -48,18 +52,19 @@ class PublicistBot:
             next_run = self.scheduler.scheduler.get_job('daily_post').next_run_time
             await update.message.reply_text(
                 f"✅ Планировщик активен\n"
-                f"⏰ Следующая публикация: {next_run.strftime('%d.%m.%Y %H:%M:%S %Z')}"
+                f"⏰ Следующая публикация: {next_run.strftime('%d.%m.%Y %H:%M:%S %Z')}",
+                reply_markup=self.get_main_keyboard()
             )
         else:
-            await update.message.reply_text("❌ Планировщик не активен")
+            await update.message.reply_text("❌ Планировщик не активен", reply_markup=self.get_main_keyboard())
 
     async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /test - тестовая публикация"""
         try:
             await self.scheduler.send_daily_post()
-            await update.message.reply_text("✅ Тестовый пост успешно опубликован!")
+            await update.message.reply_text("✅ Тестовый пост успешно опубликован!", reply_markup=self.get_main_keyboard())
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка при публикации: {e}")
+            await update.message.reply_text(f"❌ Ошибка при публикации: {e}", reply_markup=self.get_main_keyboard())
             logger.error(f"Ошибка при тестовой публикации: {e}")
 
     async def listposts_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -71,7 +76,7 @@ class PublicistBot:
             posts = data.get('posts', [])
 
             if not posts:
-                await update.message.reply_text("📭 Нет постов")
+                await update.message.reply_text("📭 Нет постов", reply_markup=self.get_main_keyboard())
                 return
 
             message = "📝 *Список постов:*\n\n"
@@ -82,18 +87,33 @@ class PublicistBot:
                 message += f"*День {post['day']}: {title}*\n"
                 message += f"{content_preview}...\n\n"
 
-            message += "\n💡 Используй /publish <день> для публикации"
+            message += "\n💡 Используй кнопку 'Опубликовать' для публикации"
 
-            await update.message.reply_text(message, parse_mode='Markdown')
+            await update.message.reply_text(message, parse_mode='Markdown', reply_markup=self.get_main_keyboard())
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {e}")
+            await update.message.reply_text(f"❌ Ошибка: {e}", reply_markup=self.get_main_keyboard())
             logger.error(f"Ошибка при получении списка постов: {e}")
 
     async def publish_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /publish <день> - публикация поста"""
         try:
             if not context.args or len(context.args) == 0:
-                await update.message.reply_text("❌ Укажи номер дня: /publish 1")
+                # Показываем список постов с кнопками для выбора
+                with open(POSTS_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                posts = data.get('posts', [])
+                if not posts:
+                    await update.message.reply_text("❌ Нет постов для публикации", reply_markup=self.get_main_keyboard())
+                    return
+
+                keyboard = []
+                for post in posts:
+                    keyboard.append([KeyboardButton(f"📤 День {post['day']}: {post['title'][:30]}")])
+                keyboard.append([KeyboardButton("🔙 Назад")])
+
+                reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+                await update.message.reply_text("Выбери пост для публикации:", reply_markup=reply_markup)
                 return
 
             day = int(context.args[0])
@@ -104,7 +124,7 @@ class PublicistBot:
             post = next((p for p in data['posts'] if p['day'] == day), None)
 
             if not post:
-                await update.message.reply_text(f"❌ Пост для дня {day} не найден")
+                await update.message.reply_text(f"❌ Пост для дня {day} не найден", reply_markup=self.get_main_keyboard())
                 return
 
             # Формируем текст поста
@@ -133,19 +153,34 @@ class PublicistBot:
                     parse_mode='Markdown'
                 )
 
-            await update.message.reply_text(f"✅ Пост (День {day}) опубликован!")
+            await update.message.reply_text(f"✅ Пост (День {day}) опубликован!", reply_markup=self.get_main_keyboard())
 
         except ValueError:
-            await update.message.reply_text("❌ Неверный формат. Используй: /publish 1")
+            await update.message.reply_text("❌ Неверный формат. Используй: /publish 1", reply_markup=self.get_main_keyboard())
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {e}")
+            await update.message.reply_text(f"❌ Ошибка: {e}", reply_markup=self.get_main_keyboard())
             logger.error(f"Ошибка при публикации поста: {e}")
 
     async def deletepost_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /deletepost <день> - удаление поста"""
         try:
             if not context.args or len(context.args) == 0:
-                await update.message.reply_text("❌ Укажи номер дня: /deletepost 1")
+                # Показываем список постов с кнопками для выбора
+                with open(POSTS_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                posts = data.get('posts', [])
+                if not posts:
+                    await update.message.reply_text("❌ Нет постов для удаления", reply_markup=self.get_main_keyboard())
+                    return
+
+                keyboard = []
+                for post in posts:
+                    keyboard.append([KeyboardButton(f"🗑️ День {post['day']}: {post['title'][:30]}")])
+                keyboard.append([KeyboardButton("🔙 Назад")])
+
+                reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+                await update.message.reply_text("Выбери пост для удаления:", reply_markup=reply_markup)
                 return
 
             day = int(context.args[0])
@@ -157,18 +192,18 @@ class PublicistBot:
             data['posts'] = [p for p in data['posts'] if p['day'] != day]
 
             if len(data['posts']) == original_count:
-                await update.message.reply_text(f"❌ Пост для дня {day} не найден")
+                await update.message.reply_text(f"❌ Пост для дня {day} не найден", reply_markup=self.get_main_keyboard())
                 return
 
             with open(POSTS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            await update.message.reply_text(f"✅ Пост (День {day}) удален")
+            await update.message.reply_text(f"✅ Пост (День {day}) удален", reply_markup=self.get_main_keyboard())
 
         except ValueError:
-            await update.message.reply_text("❌ Неверный формат. Используй: /deletepost 1")
+            await update.message.reply_text("❌ Неверный формат. Используй: /deletepost 1", reply_markup=self.get_main_keyboard())
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {e}")
+            await update.message.reply_text(f"❌ Ошибка: {e}", reply_markup=self.get_main_keyboard())
             logger.error(f"Ошибка при удалении поста: {e}")
 
     async def addpost_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -242,23 +277,61 @@ class PublicistBot:
                 f"✅ *Пост успешно добавлен!*\n\n"
                 f"День: {next_day}\n"
                 f"Заголовок: {new_post['title']}\n\n"
-                f"Используй /publish {next_day} для публикации",
-                parse_mode='Markdown'
+                f"Используй кнопку 'Опубликовать' для публикации",
+                parse_mode='Markdown',
+                reply_markup=self.get_main_keyboard()
             )
 
             context.user_data.clear()
             return ConversationHandler.END
 
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка при сохранении: {e}")
+            await update.message.reply_text(f"❌ Ошибка при сохранении: {e}", reply_markup=self.get_main_keyboard())
             logger.error(f"Ошибка при сохранении поста: {e}")
             return ConversationHandler.END
 
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Отмена добавления поста"""
         context.user_data.clear()
-        await update.message.reply_text("❌ Добавление поста отменено")
+        await update.message.reply_text("❌ Добавление поста отменено", reply_markup=self.get_main_keyboard())
         return ConversationHandler.END
+
+    async def handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик нажатий на кнопки"""
+        text = update.message.text
+
+        if text == "📊 Статус":
+            await self.status_command(update, context)
+        elif text == "📄 Список постов":
+            await self.listposts_command(update, context)
+        elif text == "📝 Добавить пост":
+            await self.addpost_start(update, context)
+        elif text == "🧪 Тест":
+            await self.test_command(update, context)
+        elif text == "📤 Опубликовать":
+            await self.publish_command(update, context)
+        elif text == "🗑️ Удалить пост":
+            await self.deletepost_command(update, context)
+        elif text == "🔙 Назад":
+            await update.message.reply_text("Главное меню:", reply_markup=self.get_main_keyboard())
+        elif text.startswith("📤 День "):
+            # Извлекаем номер дня из текста кнопки
+            try:
+                day = int(text.split("День ")[1].split(":")[0])
+                context.args = [str(day)]
+                await self.publish_command(update, context)
+            except:
+                await update.message.reply_text("❌ Ошибка обработки", reply_markup=self.get_main_keyboard())
+        elif text.startswith("🗑️ День "):
+            # Извлекаем номер дня из текста кнопки
+            try:
+                day = int(text.split("День ")[1].split(":")[0])
+                context.args = [str(day)]
+                await self.deletepost_command(update, context)
+            except:
+                await update.message.reply_text("❌ Ошибка обработки", reply_markup=self.get_main_keyboard())
+        else:
+            await update.message.reply_text("Используй кнопки ниже для управления ботом", reply_markup=self.get_main_keyboard())
 
 
     async def post_init(self, application: Application):
@@ -298,6 +371,9 @@ class PublicistBot:
             fallbacks=[CommandHandler("cancel", self.cancel)],
         )
         self.application.add_handler(conv_handler)
+
+        # Обработчик кнопок (должен быть последним)
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_button))
 
         # Регистрация хуков инициализации и остановки
         self.application.post_init = self.post_init
