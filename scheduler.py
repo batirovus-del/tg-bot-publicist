@@ -110,6 +110,30 @@ class PostScheduler:
         self.scheduler.start()
         logger.info(f"Планировщик запущен. Посты будут публиковаться каждый день в {config.POST_HOUR}:{config.POST_MINUTE:02d} ({config.TIMEZONE})")
 
+    def update_schedule(self, hour: int, minute: int):
+        """Обновление расписания публикации"""
+        try:
+            # Удаляем старую задачу
+            if self.scheduler.get_job('daily_post'):
+                self.scheduler.remove_job('daily_post')
+
+            # Добавляем новую задачу с новым временем
+            self.scheduler.add_job(
+                self.send_daily_post,
+                trigger=CronTrigger(
+                    hour=hour,
+                    minute=minute,
+                    timezone=config.TIMEZONE
+                ),
+                id='daily_post',
+                name='Ежедневная публикация поста',
+                replace_existing=True
+            )
+
+            logger.info(f"Расписание обновлено. Новое время публикации: {hour}:{minute:02d} ({config.TIMEZONE})")
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении расписания: {e}")
+
     def stop(self):
         """Остановка планировщика"""
         self.scheduler.shutdown()

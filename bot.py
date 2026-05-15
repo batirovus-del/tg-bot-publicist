@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 TITLE, CONTENT, IMAGE_QUERY = range(3)
 
 POSTS_FILE = 'posts_data.json'
+SETTINGS_FILE = 'user_settings.json'
+
+# Временные слоты для публикации
+TIME_SLOTS = {
+    'morning': {'hour': 8, 'minute': 0, 'label': '🌅 Утро (8:00)'},
+    'day': {'hour': 12, 'minute': 0, 'label': '☀️ День (12:00)'},
+    'evening': {'hour': 19, 'minute': 0, 'label': '🌆 Вечер (19:00)'},
+    'night': {'hour': 23, 'minute': 0, 'label': '🌙 Ночь (23:00)'}
+}
 
 
 class PublicistBot:
@@ -32,9 +41,34 @@ class PublicistBot:
         keyboard = [
             [KeyboardButton("📊 Статус"), KeyboardButton("📄 Список постов")],
             [KeyboardButton("📝 Добавить пост"), KeyboardButton("🧪 Тест")],
-            [KeyboardButton("📤 Опубликовать"), KeyboardButton("🗑️ Удалить пост")]
+            [KeyboardButton("📤 Опубликовать"), KeyboardButton("🗑️ Удалить пост")],
+            [KeyboardButton("⏰ Настроить время")]
         ]
         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    def load_user_settings(self):
+        """Загрузка настроек пользователя"""
+        try:
+            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            # Создаём файл с настройками по умолчанию
+            default_settings = {
+                "default_user": {
+                    "post_time": "day",
+                    "post_hour": 12,
+                    "post_minute": 0,
+                    "timezone": "Europe/Moscow"
+                }
+            }
+            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(default_settings, f, ensure_ascii=False, indent=2)
+            return default_settings
+
+    def save_user_settings(self, settings):
+        """Сохранение настроек пользователя"""
+        with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
@@ -312,6 +346,8 @@ class PublicistBot:
             await self.publish_command(update, context)
         elif text == "🗑️ Удалить пост":
             await self.deletepost_command(update, context)
+        elif text == "⏰ Настроить время":
+            await self.time_settings_command(update, context)
         elif text == "🔙 Назад":
             await update.message.reply_text("Главное меню:", reply_markup=self.get_main_keyboard())
         elif text.startswith("📤 День "):
@@ -330,8 +366,66 @@ class PublicistBot:
                 await self.deletepost_command(update, context)
             except:
                 await update.message.reply_text("❌ Ошибка обработки", reply_markup=self.get_main_keyboard())
+        elif text in [slot['label'] for slot in TIME_SLOTS.values()]:
+            # Обработка выбора времени
+            await self.set_time_slot(update, context, text)
         else:
             await update.message.reply_text("Используй кнопки ниже для управления ботом", reply_markup=self.get_main_keyboard())
+
+    async def time_settings_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик настройки времени публикации"""
+        settings = self.load_user_settings()
+        current_time = settings.get('default_user', {}).get('post_time', 'day')
+        current_label = TIME_SLOTS.get(current_time, TIME_SLOTS['day'])['label']
+
+        keyboard = []
+        for slot_key, slot_data in TIME_SLOTS.items():
+            keyboard.append([KeyboardButton(slot_data['label'])])
+        keyboard.append([KeyboardButton("🔙 Назад")])
+
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        await update.message.reply_text(
+            f"⏰ *Настройка времени публикации*\n\n"
+            f"Текущее время: {current_label}\n\n"
+            f"Выбери новое время:",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+    async def set_time_slot(self, update: Update, context: ContextTypes.DEFAULT_TYPE, selected_label: str):
+        """Установка выбранного времени публикации"""
+        # Находим ключ по label
+        selected_slot = None
+        for slot_key, slot_data in TIME_SLOTS.items():
+            if slot_data['label'] == selected_label:
+                selected_slot = slot_key
+                break
+
+        if not selected_slot:
+            await update.message.reply_text("❌ Ошибка выбора времени", reply_markup=self.get_main_keyboard())
+            return
+
+        # Загружаем настройки
+        settings = self.load_user_settings()
+        settings['default_user']['post_time'] = selected_slot
+        settings['default_user']['post_hour'] = TIME_SLOTS[selected_slot]['hour']
+        settings['default_user']['post_minute'] = TIME_SLOTS[selected_slot]['minute']
+
+        # Сохраняем настройки
+        self.save_user_settings(settings)
+
+        # Перезапускаем планировщик с новым временем
+        if self.scheduler:
+            self.scheduler.update_schedule(
+                TIME_SLOTS[selected_slot]['hour'],
+                TIME_SLOTS[selected_slot]['minute']
+            )
+
+        await update.message.reply_text(
+            f"✅ Время публикации изменено на {selected_label}\n\n"
+            f"Посты будут публиковаться в {TIME_SLOTS[selected_slot]['hour']:02d}:{TIME_SLOTS[selected_slot]['minute']:02d}",
+            reply_markup=self.get_main_keyboard()
+        )
 
 
     async def post_init(self, application: Application):
