@@ -381,7 +381,8 @@ class PublicistBot:
         elif text == "📝 Добавить пост":
             await self.addpost_start(update, context)
         elif text == "🤖 Сгенерировать пост":
-            await self.generate_post_start(update, context)
+            # Обрабатывается через ConversationHandler
+            return
         elif text == "🧪 Тест":
             await self.test_command(update, context)
         elif text == "📤 Опубликовать":
@@ -773,7 +774,10 @@ class PublicistBot:
 
         # ConversationHandler для генерации поста через AI
         generate_handler = ConversationHandler(
-            entry_points=[CommandHandler("generate", self.generate_post_start)],
+            entry_points=[
+                CommandHandler("generate", self.generate_post_start),
+                MessageHandler(filters.Regex("^🤖 Сгенерировать пост$"), self.generate_post_start)
+            ],
             states={
                 GENERATE_TOPIC: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.generate_post_topic)],
                 GENERATE_PREVIEW: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.generate_post_preview)],
