@@ -1,5 +1,6 @@
 import logging
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import config
 
 logger = logging.getLogger(__name__)
@@ -12,11 +13,9 @@ class GeminiAI:
         """Инициализация Gemini AI"""
         self.api_key = api_key or config.GEMINI_API_KEY
         if self.api_key:
-            genai.configure(api_key=self.api_key)
-            # Используем gemini-1.5-flash - быстрая и доступная модель
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            self.client = genai.Client(api_key=self.api_key)
         else:
-            self.model = None
+            self.client = None
             logger.warning("Gemini API ключ не установлен")
 
     def generate_post(self, topic: str, style: str = 'motivational') -> dict:
@@ -30,7 +29,7 @@ class GeminiAI:
         Returns:
             dict: {'title': str, 'content': str, 'image_prompt': str}
         """
-        if not self.model:
+        if not self.client:
             return {
                 'title': 'Ошибка',
                 'content': 'Gemini API ключ не установлен',
@@ -68,7 +67,10 @@ class GeminiAI:
 """
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model='gemini-2.0-flash-exp',
+                contents=prompt
+            )
             text = response.text
 
             # Парсим ответ
@@ -125,7 +127,7 @@ class GeminiAI:
         Returns:
             str: Улучшенный контент
         """
-        if not self.model:
+        if not self.client:
             return content
 
         prompt = f"""
@@ -140,7 +142,10 @@ class GeminiAI:
 """
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model='gemini-2.0-flash-exp',
+                contents=prompt
+            )
             return response.text.strip()
         except Exception as e:
             logger.error(f"Ошибка улучшения поста: {e}")
