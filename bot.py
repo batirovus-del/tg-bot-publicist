@@ -28,6 +28,40 @@ TIME_SLOTS = {
     'night': {'hour': 23, 'minute': 0, 'label': '🌙 Ночь (23:00)'}
 }
 
+# Стили постов
+POST_STYLES = {
+    'motivational': {
+        'label': '💪 Мотивационный',
+        'description': 'Вдохновляющие посты для достижения целей',
+        'tone': 'энергичный, вдохновляющий, призывающий к действию'
+    },
+    'educational': {
+        'label': '📚 Образовательный',
+        'description': 'Обучающий контент с полезной информацией',
+        'tone': 'информативный, структурированный, экспертный'
+    },
+    'news': {
+        'label': '📰 Новостной',
+        'description': 'Актуальные новости и события',
+        'tone': 'нейтральный, фактический, лаконичный'
+    },
+    'entertaining': {
+        'label': '🎉 Развлекательный',
+        'description': 'Лёгкий и интересный контент',
+        'tone': 'дружелюбный, весёлый, непринуждённый'
+    },
+    'sales': {
+        'label': '💰 Продающий',
+        'description': 'Посты для продвижения продуктов/услуг',
+        'tone': 'убедительный, ориентированный на выгоду, призыв к действию'
+    },
+    'personal': {
+        'label': '✍️ Личный блог',
+        'description': 'Личные истории и размышления',
+        'tone': 'искренний, личный, эмоциональный'
+    }
+}
+
 
 class PublicistBot:
     """Telegram бот-публицист для автоматической публикации постов"""
@@ -42,7 +76,7 @@ class PublicistBot:
             [KeyboardButton("📊 Статус"), KeyboardButton("📄 Список постов")],
             [KeyboardButton("📝 Добавить пост"), KeyboardButton("🧪 Тест")],
             [KeyboardButton("📤 Опубликовать"), KeyboardButton("🗑️ Удалить пост")],
-            [KeyboardButton("⏰ Настроить время")]
+            [KeyboardButton("⏰ Настроить время"), KeyboardButton("🎨 Выбрать стиль")]
         ]
         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -58,7 +92,8 @@ class PublicistBot:
                     "post_time": "day",
                     "post_hour": 12,
                     "post_minute": 0,
-                    "timezone": "Europe/Moscow"
+                    "timezone": "Europe/Moscow",
+                    "post_style": "motivational"
                 }
             }
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
@@ -348,6 +383,8 @@ class PublicistBot:
             await self.deletepost_command(update, context)
         elif text == "⏰ Настроить время":
             await self.time_settings_command(update, context)
+        elif text == "🎨 Выбрать стиль":
+            await self.style_settings_command(update, context)
         elif text == "🔙 Назад":
             await update.message.reply_text("Главное меню:", reply_markup=self.get_main_keyboard())
         elif text.startswith("📤 День "):
@@ -369,6 +406,9 @@ class PublicistBot:
         elif text in [slot['label'] for slot in TIME_SLOTS.values()]:
             # Обработка выбора времени
             await self.set_time_slot(update, context, text)
+        elif text in [style['label'] for style in POST_STYLES.values()]:
+            # Обработка выбора стиля
+            await self.set_post_style(update, context, text)
         else:
             await update.message.reply_text("Используй кнопки ниже для управления ботом", reply_markup=self.get_main_keyboard())
 
@@ -424,6 +464,63 @@ class PublicistBot:
         await update.message.reply_text(
             f"✅ Время публикации изменено на {selected_label}\n\n"
             f"Посты будут публиковаться в {TIME_SLOTS[selected_slot]['hour']:02d}:{TIME_SLOTS[selected_slot]['minute']:02d}",
+            reply_markup=self.get_main_keyboard()
+        )
+
+    async def style_settings_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик настройки стиля постов"""
+        settings = self.load_user_settings()
+        current_style = settings.get('default_user', {}).get('post_style', 'motivational')
+        current_style_data = POST_STYLES.get(current_style, POST_STYLES['motivational'])
+
+        keyboard = []
+        for style_key, style_data in POST_STYLES.items():
+            # Добавляем галочку к текущему стилю
+            label = style_data['label']
+            if style_key == current_style:
+                label += " ✓"
+            keyboard.append([KeyboardButton(style_data['label'])])
+        keyboard.append([KeyboardButton("🔙 Назад")])
+
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+        message = f"🎨 *Настройка стиля постов*\n\n"
+        message += f"Текущий стиль: {current_style_data['label']}\n"
+        message += f"_{current_style_data['description']}_\n\n"
+        message += "Выбери новый стиль:"
+
+        await update.message.reply_text(
+            message,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+
+    async def set_post_style(self, update: Update, context: ContextTypes.DEFAULT_TYPE, selected_label: str):
+        """Установка выбранного стиля постов"""
+        # Находим ключ по label
+        selected_style = None
+        for style_key, style_data in POST_STYLES.items():
+            if style_data['label'] == selected_label:
+                selected_style = style_key
+                break
+
+        if not selected_style:
+            await update.message.reply_text("❌ Ошибка выбора стиля", reply_markup=self.get_main_keyboard())
+            return
+
+        # Загружаем настройки
+        settings = self.load_user_settings()
+        settings['default_user']['post_style'] = selected_style
+
+        # Сохраняем настройки
+        self.save_user_settings(settings)
+
+        style_data = POST_STYLES[selected_style]
+        await update.message.reply_text(
+            f"✅ Стиль постов изменён на {style_data['label']}\n\n"
+            f"_{style_data['description']}_\n\n"
+            f"Тон: {style_data['tone']}",
+            parse_mode='Markdown',
             reply_markup=self.get_main_keyboard()
         )
 
