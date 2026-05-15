@@ -17,8 +17,8 @@ TIMEZONE = os.getenv('TIMEZONE', 'Europe/Moscow')
 POST_HOUR = int(os.getenv('POST_HOUR', 12))
 POST_MINUTE = int(os.getenv('POST_MINUTE', 0))
 
-# Gemini API Key
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+# Groq API Key
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 
 # Проверка обязательных параметров
 if not BOT_TOKEN:

@@ -1,22 +1,21 @@
 import logging
-from google import genai
-from google.genai import types
+from groq import Groq
 import config
 
 logger = logging.getLogger(__name__)
 
 
 class GeminiAI:
-    """Класс для работы с Gemini AI"""
+    """Класс для работы с Groq AI"""
 
     def __init__(self, api_key: str = None):
-        """Инициализация Gemini AI"""
-        self.api_key = api_key or config.GEMINI_API_KEY
+        """Инициализация Groq AI"""
+        self.api_key = api_key or config.GROQ_API_KEY
         if self.api_key:
-            self.client = genai.Client(api_key=self.api_key)
+            self.client = Groq(api_key=self.api_key)
         else:
             self.client = None
-            logger.warning("Gemini API ключ не установлен")
+            logger.warning("Groq API ключ не установлен")
 
     def generate_post(self, topic: str, style: str = 'motivational') -> dict:
         """
@@ -67,12 +66,16 @@ class GeminiAI:
 """
 
         try:
-            # Используем имя модели без префикса - библиотека сама добавит 'models/'
-            response = self.client.models.generate_content(
-                model='gemini-1.5-flash-latest',
-                contents=prompt
+            # Используем Groq API с моделью llama-3.3-70b-versatile
+            response = self.client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1024
             )
-            text = response.text
+            text = response.choices[0].message.content
 
             # Парсим ответ
             title = ''
@@ -143,11 +146,15 @@ class GeminiAI:
 """
 
         try:
-            response = self.client.models.generate_content(
-                model='gemini-1.5-flash-latest',
-                contents=prompt
+            response = self.client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=512
             )
-            return response.text.strip()
+            return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"Ошибка улучшения поста: {e}")
             return content

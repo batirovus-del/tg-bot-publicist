@@ -536,18 +536,18 @@ class PublicistBot:
         """Начало генерации поста через AI"""
         logger.info(f"Пользователь {update.effective_user.id} начал генерацию поста")
 
-        if not config.GEMINI_API_KEY or config.GEMINI_API_KEY == 'your_gemini_api_key_here':
-            logger.warning("Gemini API ключ не настроен")
+        if not config.GROQ_API_KEY or config.GROQ_API_KEY == 'your_groq_api_key_here':
+            logger.warning("Groq API ключ не настроен")
             await update.message.reply_text(
-                "❌ Gemini API ключ не настроен\n\n"
+                "❌ Groq API ключ не настроен\n\n"
                 "Для использования AI-генерации нужно:\n"
-                "1. Получить API ключ на https://makersuite.google.com/app/apikey\n"
-                "2. Добавить его в файл .env: GEMINI_API_KEY=ваш_ключ",
+                "1. Получить API ключ на https://console.groq.com\n"
+                "2. Добавить его в файл .env: GROQ_API_KEY=ваш_ключ",
                 reply_markup=self.get_main_keyboard()
             )
             return ConversationHandler.END
 
-        logger.info("Gemini API ключ найден, запрашиваем тему")
+        logger.info("Groq API ключ найден, запрашиваем тему")
         await update.message.reply_text(
             "🤖 *Генерация поста через AI*\n\n"
             "Введи тему для поста\n"
@@ -578,7 +578,7 @@ class PublicistBot:
         )
 
         try:
-            logger.info("Начинаем генерацию через Gemini...")
+            logger.info("Начинаем генерацию через Groq...")
             # Генерируем пост
             generated = self.gemini.generate_post(topic, current_style)
             logger.info(f"Пост сгенерирован: заголовок={generated['title'][:50]}")
