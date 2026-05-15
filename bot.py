@@ -226,7 +226,8 @@ class PublicistBot:
                     parse_mode='Markdown'
                 )
 
-            await update.message.reply_text(f"✅ Пост (День {day}) опубликован!", reply_markup=self.get_main_keyboard())
+            await update.message.reply_text(f"✅ Пост (День {day}) успешно опубликован!", reply_markup=self.get_main_keyboard())
+            logger.info(f"Пост (День {day}) успешно опубликован в канал {config.CHANNEL_ID}")
 
         except ValueError:
             await update.message.reply_text("❌ Неверный формат. Используй: /publish 1", reply_markup=self.get_main_keyboard())
@@ -532,7 +533,10 @@ class PublicistBot:
 
     async def generate_post_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Начало генерации поста через AI"""
+        logger.info(f"Пользователь {update.effective_user.id} начал генерацию поста")
+
         if not config.GEMINI_API_KEY or config.GEMINI_API_KEY == 'your_gemini_api_key_here':
+            logger.warning("Gemini API ключ не настроен")
             await update.message.reply_text(
                 "❌ Gemini API ключ не настроен\n\n"
                 "Для использования AI-генерации нужно:\n"
@@ -542,6 +546,7 @@ class PublicistBot:
             )
             return ConversationHandler.END
 
+        logger.info("Gemini API ключ найден, запрашиваем тему")
         await update.message.reply_text(
             "🤖 *Генерация поста через AI*\n\n"
             "Введи тему для поста\n"
@@ -556,9 +561,13 @@ class PublicistBot:
         topic = update.message.text
         context.user_data['generate_topic'] = topic
 
+        logger.info(f"Получена тема для генерации: {topic}")
+
         # Получаем текущий стиль из настроек
         settings = self.load_user_settings()
         current_style = settings.get('default_user', {}).get('post_style', 'motivational')
+
+        logger.info(f"Стиль поста: {current_style}")
 
         await update.message.reply_text(
             f"⏳ Генерирую пост на тему: *{topic}*\n"
@@ -567,30 +576,41 @@ class PublicistBot:
             parse_mode='Markdown'
         )
 
-        # Генерируем пост
-        generated = self.gemini.generate_post(topic, current_style)
+        try:
+            logger.info("Начинаем генерацию через Gemini...")
+            # Генерируем пост
+            generated = self.gemini.generate_post(topic, current_style)
+            logger.info(f"Пост сгенерирован: заголовок={generated['title'][:50]}")
 
-        context.user_data['generated_title'] = generated['title']
-        context.user_data['generated_content'] = generated['content']
-        context.user_data['generated_image_prompt'] = generated['image_prompt']
+            context.user_data['generated_title'] = generated['title']
+            context.user_data['generated_content'] = generated['content']
+            context.user_data['generated_image_prompt'] = generated['image_prompt']
 
-        # Показываем предпросмотр
-        preview_text = f"✅ *Пост сгенерирован!*\n\n"
-        preview_text += f"*Заголовок:*\n{generated['title']}\n\n"
-        preview_text += f"*Содержание:*\n{generated['content'][:500]}"
-        if len(generated['content']) > 500:
-            preview_text += "..."
+            # Показываем предпросмотр
+            preview_text = f"✅ *Пост сгенерирован!*\n\n"
+            preview_text += f"*Заголовок:*\n{generated['title']}\n\n"
+            preview_text += f"*Содержание:*\n{generated['content'][:500]}"
+            if len(generated['content']) > 500:
+                preview_text += "..."
 
-        keyboard = [
-            [KeyboardButton("✅ Сохранить пост")],
-            [KeyboardButton("🔄 Сгенерировать заново")],
-            [KeyboardButton("✏️ Редактировать")],
-            [KeyboardButton("❌ Отменить")]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            keyboard = [
+                [KeyboardButton("✅ Сохранить пост")],
+                [KeyboardButton("🔄 Сгенерировать заново")],
+                [KeyboardButton("✏️ Редактировать")],
+                [KeyboardButton("❌ Отменить")]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-        await update.message.reply_text(preview_text, parse_mode='Markdown', reply_markup=reply_markup)
-        return GENERATE_PREVIEW
+            await update.message.reply_text(preview_text, parse_mode='Markdown', reply_markup=reply_markup)
+            return GENERATE_PREVIEW
+
+        except Exception as e:
+            logger.error(f"Ошибка при генерации поста: {e}", exc_info=True)
+            await update.message.reply_text(
+                f"❌ Ошибка при генерации поста:\n{str(e)}",
+                reply_markup=self.get_main_keyboard()
+            )
+            return ConversationHandler.END
 
     async def generate_post_preview(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка действий с предпросмотром"""
